@@ -61,44 +61,6 @@ def run_command(cmd, description=""):
         return None
 
 
-# def read_eeprom(description=""):
-#     """Read EEPROM memory"""
-#     output_file = f"eeprom_read_{int(time.time())}.bin"
-#     cmd = ['st-flash', '--format', 'binary', 'read', output_file, eeprom_bank1_start, eeprom_size]
-#     result = run_command(cmd, f"Reading EEPROM memory {description}")
-
-#     if result and os.path.exists(output_file):
-#         try:
-#             with open(output_file, 'rb') as f:
-#                 data = f.read()
-            
-#             # Check if all bytes are 0x00
-#             all_zeros = all(b == 0 for b in data)
-#             non_zero_count = sum(1 for b in data if b != 0)
-            
-#             if verbose:
-#                 print(f"Read {len(data)} bytes")
-#                 print(f"Non-zero bytes: {non_zero_count}/{len(data)}")
-#                 print(f"All zeros: {all_zeros}")
-            
-#             # Show first 32 bytes
-#             print("First 16 bytes:", ' '.join(f'{b:02X}' for b in data[:16]))
-            
-#             return data, all_zeros
-#         except Exception as e:
-#             print(f"Error reading flash data: {e}")
-#     return result
-
-# def write_eeprom(description=""):
-#     """Write EEPROM memory"""
-#     output_file = f"eeprom_write_{int(time.time())}.bin"
-#     with open(output_file, 'wb') as f:
-#         f.write(test_data)
-#     cmd = ['st-flash', '--format', 'binary', 'write', output_file, eeprom_bank1_start, eeprom_size]
-#     result = run_command(cmd, f"Writing EEPROM memory {description}")
-#     return result
-
-
 def read_flash(description=""):
     """Read flash memory"""
     output_file = f"flash_read_{int(time.time())}.bin"
@@ -175,35 +137,6 @@ def read_option_bytes(print_result=False):
             except Exception as e:
                 print(f"Error reading option bytes file: {e}")
         return None
-
-def upload_firmware():
-    """Upload firmware to the device"""
-    if not firmware_path:
-        print("No firmware path specified. Creating a simple test firmware...")
-        create_test_firmware()
-    
-    if not os.path.exists(firmware_path):
-        print(f"ERROR: Firmware file {firmware_path} not found!")
-        return False
-        
-    cmd = ['st-flash', 'write', firmware_path, '0x8000000']
-    result = run_command(cmd, f"Uploading firmware: {firmware_path}")
-    return result is not None
-
-def create_test_firmware():
-    """Create a simple test firmware binary"""
-    firmware_path = "test_firmware.bin"
-    
-    # Create a simple test pattern
-    test_data = bytearray()
-    for i in range(1024):  # 1KB of test data
-        test_data.append(i & 0xFF)
-    
-    with open(firmware_path, 'wb') as f:
-        f.write(test_data)
-    
-    print(f"Created test firmware: {firmware_path}")
-
 
 def set_rdp_level_1():
     """Set RDP to level 1"""
