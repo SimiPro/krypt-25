@@ -355,7 +355,7 @@ def check_data_0(data):
 
 def check_data_write(data):
     # checking that data is same as test_data
-    return all(data[:16] == test_data)
+    return data[:16] == test_data
 
 def data_print_first_32_bytes(data):
     print("First 32 bytes:", ' '.join(f'{b:02X}' for b in data[:32]))
@@ -365,11 +365,13 @@ def data_to_ascii(data):
 
 def check_data_protected(data):
     # checking that data is all 0x00
-    # 73 74 2d 66 6c 61 73 68  20 31 2e 38 2e 30 0a 63
-    data_expected = bytearray(b"st-flash 1.8.0.could not read")
-    print("Expected data:", data_to_ascii(data_expected))
-    print("Actual data:", data_to_ascii(data[:16]))
-    return all(data[:16] == data_expected)
+    # 8000550103000301000000000000ffff
+    data_expected = bytearray(b"\x80\x00\x55\x01\x03\x00\x03\x01\x00\x00\x00\x00\x00\x00\xff\xff")
+    if verbose:
+        print("Expected data:", data_to_ascii(data_expected))
+        print("Actual data:", data_to_ascii(data))
+        print("data: ", data)
+    return data[:16] == data_expected
 
 def run_demo():
     print("STM32 Nucleo RDP (Read Protection) Demo")
@@ -379,37 +381,11 @@ def run_demo():
         return False
     get_device_info()
 
-    print("STEP 1")
-    current_rdp = read_option_bytes(print_result=True)
-
     set_rdp_level_0()
-    reset_device()
-    print("Waiting for device reset...")
-    time.sleep(3)
-
-    # Upload firmware
-    # print("\n" + "="*50)
-    # print("STEP 2: Upload firmware")
-    # print("="*50)
-    # if not upload_firmware():
-    #     print("Failed to upload firmware!")
-    #     return False
-    
-    # Read flash before RDP
-    print("\n" + "="*50)
-    print("STEP 2: Read flash BEFORE RDP protection")
-    print("="*50)
-    data_before = read_flash("initial flash state")
-    data_print_first_32_bytes(data_before)
-
-    if not data_before:
-        print("Failed to read flash memory!")
-        return False
-
+    time.sleep(0.1)
     write_flash()
     reset_device()
-    print("Waiting for device reset...")
-    time.sleep(3)
+    time.sleep(0.1)
 
     data_after = read_flash("after writing to flash")
     ok_after_write = check_data_write(data_after)
@@ -418,57 +394,32 @@ def run_demo():
         return False
 
     # Set RDP Level 1
-    print("STEP 4: Set RDP Level 1")
     set_rdp_level_1()
-
-    # wait for device to reset
     reset_device()
-    print("Waiting for device reset...")
-    time.sleep(3)
+    time.sleep(0.1)
 
-    # Verify RDP is set
-    print("STEP 5: Verify RDP level")
-    new_rdp = read_option_bytes()
-    
-    # Try to read flash after RDP
-    print("STEP 6: Read flash AFTER RDP protection")
-    data_after = read_flash("(after RDP)")
-    check_data_protected(data_after)
+    # check if we cant read flash
+    data_after = read_flash("after writing to flash")
+    ok_after_write = check_data_protected(data_after)
+    if not ok_after_write:
+        print("Failed to read data to flash!")
+        return False
 
-    # Set RDP Level 0 
+    # now setting rdp0 
+    ## GLITCH HERE!!!!! 
     set_rdp_level_0()
+    #### GLITCH HERE!!!!! 
+
     # make sure data is all 0 now
     data_after = read_flash("(after RDP)")
     has_to_be_0 = check_data_0(data_after)
     if not has_to_be_0:
-        print("Failed to read flash memory!")
+        print("GLITCH WORKED!")
+        print(data_to_ascii(data_after))
+        return True
+    else:
+        print("GLITCH FAILED! All 0x00")
         return False
-
-    # Summary
-    print("\n" + "="*60)
-    print("DEMO SUMMARY")
-    print("="*60)
-    print(f"RDP before: 0x{current_rdp:02X}" if current_rdp is not None else "RDP before: Unknown")
-    print(f"RDP after:  0x{new_rdp:02X}" if new_rdp is not None else "RDP after: Unknown")
-    print(f"Flash read before RDP: {'SUCCESS' if data_before else 'FAILED'}")
-    print(f"Flash read after RDP:  {'SUCCESS' if data_after else 'FAILED'}")
-    
-    if data_before and data_after:
-        print(f"Data before RDP all zeros: {all_zeros_before}")
-        print(f"Data after RDP all zeros:  {all_zeros_after}")
-        
-        if not all_zeros_before and all_zeros_after:
-            print("\n SUCCESS: RDP protection is working!")
-            print("   - Before RDP: Could read actual flash data")
-            print("   - After RDP:  Reading returns all zeros (protected)")
-        elif all_zeros_before and all_zeros_after:
-            print("\nWARNING: Both reads returned zeros")
-            print("   This might indicate the flash was empty or RDP was already active")
-        else:
-            print("\nUNEXPECTED: RDP protection may not be working as expected")
-    
-    print("\nNOTE: To disable RDP Level 1, you'll need to perform a mass erase")
-    print("      which will erase all flash memory content.")
     
     return True
 
