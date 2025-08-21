@@ -1,5 +1,5 @@
 def main():
-    binary_file = "s_test.bin"
+    binary_file = "flash_read_1755783978.bin"
     with open(binary_file, "rb") as f:
         data = f.read()
     # print first 16 bytes in hex

