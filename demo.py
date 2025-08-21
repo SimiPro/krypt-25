@@ -1,5 +1,4 @@
 from ballisticgel import ballisticgel as bg
-import chipwhisperer as cw
 from chipshouter import ChipSHOUTER
 import time
 from matplotlib import pyplot as plt
@@ -58,54 +57,19 @@ def main2():
     cw521 = bg.CW521()
     cw521.con()
 
-    doplot = True
-    savefile = None
-    #savefile = 'error_locations.bin' 
-
-    #Raw method is slower but more flexible
-    use_raw_method = False
-
-    print("Settings: ")
-    print("  Using slow (raw) mode  : " + str(use_raw_method))
-    print("  Showing plot of results: " + str(doplot))
-    print("  Results filename       : " + str(savefile))
-
-    print("Starting main loop now: \n")
-
     while True:
         try:
             glitch_off()
-            if use_raw_method:
-                print("LOOP START: Writing data to SRAM...")
-                cw521.raw_test_setup()
-                input(" Hit enter when glitch inserted")
-                print(" Reading SRAM data...")
-                results = cw521.raw_test_compare()
-            else:
-                print("LOOP START: Writing data to SRAM...")
-                cw521.seed_test_setup()
-                print("GLITCHIIIIING")
-                time.sleep(0.5)
-                glitch_on()
-                #input(" Hit enter when glitch inserted")
-                print(" Reading SRAM data...")
-                results = cw521.seed_test_compare()
+
+            print("LOOP START: Writing data to SRAM...")
+            cw521.seed_test_setup()
+            print("GLITCHIIIIING")
+            time.sleep(0.5)
+            glitch_on()
+            #input(" Hit enter when glitch inserted")
+            print(" Reading SRAM data...")
+            results = cw521.seed_test_compare()
             
-            errdatay = results['errdatay']
-            errdatax = results['errdatax']
-            errorlist = results['errorlist']
-            
-            if doplot:
-                plt.plot(errdatax, errdatay, '.r')
-                plt.axis([0, 8192, 0, 4096])
-                plt.show()
-
-            if savefile:
-                with open(savefile, "wb") as errfile:
-                    errfile.write(bytearray(errorlist))
-
-            print("")
-
         except:
             cw521.close()
             raise
